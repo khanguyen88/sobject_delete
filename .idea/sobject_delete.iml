@@ -12,8 +12,14 @@
       <sourceFolder url="file://$MODULE_DIR$/graph/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/graph/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/cli/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/cli/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/cli/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/cli/benches" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/.idea" />
+      <excludeFolder url="file://$MODULE_DIR$/cli/target" />
       <excludeFolder url="file://$MODULE_DIR$/graph/target" />
       <excludeFolder url="file://$MODULE_DIR$/salesforce/target" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/sobject_dependencies.iml" filepath="$PROJECT_DIR$/.idea/sobject_dependencies.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/sobject_delete.iml" filepath="$PROJECT_DIR$/.idea/sobject_delete.iml" />
     </modules>
   </component>
 </project>
