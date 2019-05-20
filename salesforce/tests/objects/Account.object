@@ -33,4 +33,13 @@
         <trackHistory>false</trackHistory>
         <type>Lookup</type>
     </fields>
+    <fields>
+        <fullName>Auto_Number__c</fullName>
+        <displayFormat>A{00000000}</displayFormat>
+        <externalId>false</externalId>
+        <label>Auto Number Field</label>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>AutoNumber</type>
+    </fields>
 </CustomObject>

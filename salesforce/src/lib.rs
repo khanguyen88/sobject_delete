@@ -2,20 +2,22 @@ pub mod salesforce {
     extern crate strum;
     extern crate strum_macros;
 
-    use core::borrow::{Borrow, BorrowMut};
     use std::fs::File;
     use std::io::BufReader;
     use std::path::Path;
+    use std::str::FromStr;
 
     use quick_xml::events::Event;
     use quick_xml::Reader;
     use strum_macros::EnumString;
 
+    #[derive(Debug, PartialEq, Eq)]
     pub struct SObject {
         name: String,
         lookup_fields: Vec<LookupField>,
     }
 
+    #[derive(Debug, PartialEq, Eq)]
     pub struct LookupField {
         full_name: String,
         target_sobject: String,
@@ -23,13 +25,13 @@ pub mod salesforce {
         delete_constraint: DeleteConstraint,
     }
 
-    #[derive(EnumString)]
+    #[derive(EnumString, Debug, PartialEq, Eq)]
     pub enum LookupType {
         Lookup,
         MasterDetail,
     }
 
-    #[derive(EnumString)]
+    #[derive(EnumString, Debug, PartialEq, Eq)]
     pub enum DeleteConstraint {
         SetNull,
         Restrict,
@@ -111,7 +113,19 @@ pub mod salesforce {
                         }
                     }
                     Ok(Event::End(ref element)) if b"fields" == element.name() => {
-                        println!("{:#?}", field_definition);
+                        let lookup_field = field_definition
+                            .filter(|field| LookupType::from_str(&field.field_type).is_ok())
+                            .map(|mut field| LookupField {
+                                full_name: field.full_name.clone(),
+                                target_sobject: field.reference_to.take().unwrap(),
+                                lookup_type: LookupType::from_str(&field.field_type).unwrap(),
+                                delete_constraint: DeleteConstraint::from_str(&field.delete_constraint.take().unwrap()).unwrap(),
+                            });
+                        if let Some(lookup_field) = lookup_field {
+                            sobject.lookup_fields.push(lookup_field);
+                        }
+
+                        field_definition = None;
                     }
                     Ok(Event::Eof) => {
                         println!("Finished reading {:?}", file_path.file_name());
@@ -130,13 +144,36 @@ pub mod salesforce {
     mod tests {
         use std::path::Path;
 
-        use crate::salesforce::SObject;
+        use crate::salesforce::{LookupField, SObject};
+        use crate::salesforce::DeleteConstraint::{SetNull, Restrict, Cascade};
+        use crate::salesforce::LookupType::Lookup;
 
         #[test]
         fn parse_definition_correctly() {
             let account = SObject::parse(Path::new("../salesforce/tests/objects/Account.object"));
 
             assert_eq!("Account", account.name());
+
+            assert_eq!(3, account.lookup_fields.len());
+
+            assert_eq!(Some(&LookupField {
+                full_name: "SetNull_Contact__c".to_owned(),
+                target_sobject: "Contact".to_owned(),
+                delete_constraint: SetNull,
+                lookup_type: Lookup,
+            }), account.lookup_fields.get(0));
+            assert_eq!(Some(&LookupField {
+                full_name: "Restrict_Contact__c".to_owned(),
+                target_sobject: "Contact".to_owned(),
+                delete_constraint: Restrict,
+                lookup_type: Lookup,
+            }), account.lookup_fields.get(1));
+            assert_eq!(Some(&LookupField {
+                full_name: "Cascade_Contact__c".to_owned(),
+                target_sobject: "Contact".to_owned(),
+                delete_constraint: Cascade,
+                lookup_type: Lookup,
+            }), account.lookup_fields.get(2));
         }
     }
 }
