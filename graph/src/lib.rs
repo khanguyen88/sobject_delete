@@ -26,8 +26,8 @@ mod graph {
             }
 
             let mut vertices_with_no_incoming: VecDeque<usize> = VecDeque::with_capacity(self.adjacency_list.len());
-            for vertex in 0..in_degrees.len() {
-                if in_degrees[vertex] == 0 {
+            for (vertex, in_degree) in in_degrees.iter().enumerate() {
+                if *in_degree == 0 {
                     vertices_with_no_incoming.push_back(vertex);
                 }
             }
@@ -47,9 +47,9 @@ mod graph {
             }
 
             if result.len() != in_degrees.len() {
-                return None;
+                None
             } else {
-                return Some(result);
+                Some(result)
             }
         }
     }

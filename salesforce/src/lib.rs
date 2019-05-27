@@ -4,7 +4,7 @@ pub mod salesforce {
 
     use std::fs::File;
     use std::io::BufReader;
-    use std::path::Path;
+    use std::path::PathBuf;
     use std::str::FromStr;
 
     use quick_xml::events::Event;
@@ -46,12 +46,33 @@ pub mod salesforce {
         delete_constraint: Option<String>,
     }
 
+    pub fn is_sobject(object_name: &str) -> bool {
+        !object_name.ends_with("__e")
+    }
+
     impl SObject {
         pub fn name(&self) -> &str {
             &self.name
         }
 
-        pub fn parse(file_path: &Path) -> SObject {
+        pub fn parse(file_path: &PathBuf) -> Vec<SObject> {
+            if file_path.is_dir() {
+                let mut paths: Vec<PathBuf> = vec![];
+                for entry in file_path.read_dir().expect("read_dir call failed") {
+                    if let Ok(entry) = entry {
+                        paths.push(entry.path());
+                    };
+                };
+                paths.iter()
+                    .filter(|path| path.is_file() && is_sobject(path.file_stem().and_then(std::ffi::OsStr::to_str).unwrap()))
+                    .map(SObject::parse_sobject_file)
+                    .collect()
+            } else {
+                vec![SObject::parse_sobject_file(file_path)]
+            }
+        }
+
+        fn parse_sobject_file(file_path: &PathBuf) -> SObject {
             let file_name_without_extension: String = file_path.file_stem()
                 .and_then(std::ffi::OsStr::to_str)
                 .map(std::borrow::ToOwned::to_owned)
@@ -144,13 +165,17 @@ pub mod salesforce {
     mod tests {
         use std::path::Path;
 
-        use crate::salesforce::{LookupField, SObject};
-        use crate::salesforce::DeleteConstraint::{SetNull, Restrict, Cascade};
+        use crate::salesforce::{is_sobject, LookupField, SObject};
+        use crate::salesforce::DeleteConstraint::{Cascade, Restrict, SetNull};
         use crate::salesforce::LookupType::Lookup;
 
         #[test]
         fn parse_definition_correctly() {
-            let account = SObject::parse(Path::new("../salesforce/tests/objects/Account.object"));
+            let account = SObject::parse(&Path::new("../salesforce/tests/objects/Account.object").to_path_buf());
+
+            assert_eq!(1, account.len());
+
+            let account = account.get(0).unwrap();
 
             assert_eq!("Account", account.name());
 
@@ -174,6 +199,50 @@ pub mod salesforce {
                 delete_constraint: Cascade,
                 lookup_type: Lookup,
             }), account.lookup_fields.get(2));
+        }
+
+        #[test]
+        fn parse_folder_correctly() {
+            let sobjects = SObject::parse(&Path::new("../salesforce/tests/objects").to_path_buf());
+
+            assert_eq!(2, sobjects.len());
+
+            {
+                let account = sobjects.get(0).unwrap();
+                assert_eq!("Account", account.name());
+                assert_eq!(3, account.lookup_fields.len());
+                assert_eq!(Some(&LookupField {
+                    full_name: "SetNull_Contact__c".to_owned(),
+                    target_sobject: "Contact".to_owned(),
+                    delete_constraint: SetNull,
+                    lookup_type: Lookup,
+                }), account.lookup_fields.get(0));
+                assert_eq!(Some(&LookupField {
+                    full_name: "Restrict_Contact__c".to_owned(),
+                    target_sobject: "Contact".to_owned(),
+                    delete_constraint: Restrict,
+                    lookup_type: Lookup,
+                }), account.lookup_fields.get(1));
+                assert_eq!(Some(&LookupField {
+                    full_name: "Cascade_Contact__c".to_owned(),
+                    target_sobject: "Contact".to_owned(),
+                    delete_constraint: Cascade,
+                    lookup_type: Lookup,
+                }), account.lookup_fields.get(2));
+            }
+
+            {
+                let contact = sobjects.get(1).unwrap();
+                assert_eq!("Contact", contact.name());
+                assert_eq!(0, contact.lookup_fields.len());
+            }
+        }
+
+        #[test]
+        fn test_sobject_detection() {
+            assert_eq!(true, is_sobject("Account"));
+            assert_eq!(true, is_sobject("Custom_Object__c"));
+            assert_eq!(false, is_sobject("Custom_Event__e"));
         }
     }
 }
