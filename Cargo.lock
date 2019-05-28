@@ -212,6 +212,7 @@ dependencies = [
 name = "salesforce"
 version = "0.1.0"
 dependencies = [
+ "graph 0.1.0",
  "quick-xml 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "strum 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "strum_macros 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",

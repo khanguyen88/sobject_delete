@@ -8,3 +8,4 @@ edition = "2018"
 quick-xml = "0.14.0"
 strum = "0.15.0"
 strum_macros = "0.15.0"
+graph = { path = "../graph" }
