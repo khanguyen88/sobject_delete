@@ -25,7 +25,7 @@ pub struct LookupField {
     full_name: String,
     target_sobject: String,
     lookup_type: LookupType,
-    delete_constraint: DeleteConstraint,
+    delete_constraint: Option<DeleteConstraint>,
 }
 
 #[derive(EnumString, Debug, PartialEq, Eq)]
@@ -50,7 +50,7 @@ struct FieldDefinition {
 }
 
 pub fn is_sobject(object_name: &str) -> bool {
-    !object_name.ends_with("__e")
+    !object_name.ends_with("__e") && !object_name.ends_with("__mdt")
 }
 
 pub fn delete_order(sobjects: &[SObject]) -> Option<Vec<&SObject>> {
@@ -60,7 +60,7 @@ pub fn delete_order(sobjects: &[SObject]) -> Option<Vec<&SObject>> {
         map(|sorted_indices| {
             let mut result: Vec<&SObject> = Vec::with_capacity(sorted_indices.len());
             for index in sorted_indices {
-                result.push(sobjects.get(index).unwrap());
+                result.push(&sobjects[index]);
             }
             result
         })
@@ -82,8 +82,8 @@ fn to_graph(sobjects: &[SObject]) -> DirectedGraph {
         let mut edges: Vec<usize> = Vec::with_capacity(sobject.lookup_fields.len());
 
         for field in &sobject.lookup_fields {
-            if field.lookup_type == LookupType::Lookup && field.delete_constraint == DeleteConstraint::Restrict {
-                edges.push(*index_by_sobject_name.get(field.target_sobject.as_str()).unwrap());
+            if field.lookup_type == LookupType::Lookup && field.delete_constraint == Some(DeleteConstraint::Restrict) {
+                edges.push(index_by_sobject_name[field.target_sobject.as_str()]);
             }
         }
         graph.add_edges(index, edges.as_slice());
@@ -179,13 +179,14 @@ impl SObject {
                         .filter(|field| LookupType::from_str(&field.field_type).is_ok())
                         .map(|mut field| LookupField {
                             full_name: field.full_name.clone(),
-                            target_sobject: field.reference_to.take().unwrap(),
+                            target_sobject: field.reference_to.take().unwrap_or_else(|| String::from("")),
                             lookup_type: LookupType::from_str(&field.field_type).unwrap(),
-                            delete_constraint: DeleteConstraint::from_str(&field.delete_constraint.take().unwrap()).unwrap(),
+                            delete_constraint: field.delete_constraint
+                                .and_then(|value| DeleteConstraint::from_str(value.as_str()).ok()),
                         });
                     if let Some(lookup_field) = lookup_field {
                         sobject.lookup_fields.push(lookup_field);
-                    }
+                    };
 
                     field_definition = None;
                 }
@@ -225,19 +226,19 @@ mod tests {
         assert_eq!(Some(&LookupField {
             full_name: "SetNull_Contact__c".to_owned(),
             target_sobject: "Contact".to_owned(),
-            delete_constraint: SetNull,
+            delete_constraint: Some(SetNull),
             lookup_type: Lookup,
         }), account.lookup_fields.get(0));
         assert_eq!(Some(&LookupField {
             full_name: "Restrict_Contact__c".to_owned(),
             target_sobject: "Contact".to_owned(),
-            delete_constraint: Restrict,
+            delete_constraint: Some(Restrict),
             lookup_type: Lookup,
         }), account.lookup_fields.get(1));
         assert_eq!(Some(&LookupField {
             full_name: "Cascade_Contact__c".to_owned(),
             target_sobject: "Contact".to_owned(),
-            delete_constraint: Cascade,
+            delete_constraint: Some(Cascade),
             lookup_type: Lookup,
         }), account.lookup_fields.get(2));
     }
@@ -255,19 +256,19 @@ mod tests {
             assert_eq!(Some(&LookupField {
                 full_name: "SetNull_Contact__c".to_owned(),
                 target_sobject: "Contact".to_owned(),
-                delete_constraint: SetNull,
+                delete_constraint: Some(SetNull),
                 lookup_type: Lookup,
             }), account.lookup_fields.get(0));
             assert_eq!(Some(&LookupField {
                 full_name: "Restrict_Contact__c".to_owned(),
                 target_sobject: "Contact".to_owned(),
-                delete_constraint: Restrict,
+                delete_constraint: Some(Restrict),
                 lookup_type: Lookup,
             }), account.lookup_fields.get(1));
             assert_eq!(Some(&LookupField {
                 full_name: "Cascade_Contact__c".to_owned(),
                 target_sobject: "Contact".to_owned(),
-                delete_constraint: Cascade,
+                delete_constraint: Some(Cascade),
                 lookup_type: Lookup,
             }), account.lookup_fields.get(2));
         }
@@ -284,6 +285,7 @@ mod tests {
         assert_eq!(true, is_sobject("Account"));
         assert_eq!(true, is_sobject("Custom_Object__c"));
         assert_eq!(false, is_sobject("Custom_Event__e"));
+        assert_eq!(false, is_sobject("Custom_Metadata__mdt"));
     }
 
     #[test]

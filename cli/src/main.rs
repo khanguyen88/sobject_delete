@@ -4,6 +4,9 @@ use std::path::PathBuf;
 
 use structopt::StructOpt;
 
+use salesforce;
+use salesforce::SObject;
+
 #[derive(Debug, StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 struct CliArg {
@@ -16,6 +19,12 @@ struct CliArg {
 }
 
 fn main() {
-    let args = CliArg::from_args();
+    let args: CliArg = CliArg::from_args();
     println!("{:#?}", args);
+
+    let mut sobjects: Vec<SObject> = vec![];
+    for path in &args.paths {
+        sobjects.extend(SObject::parse(path));
+    }
+    println!("{:#?}", sobjects);
 }
