@@ -49,48 +49,6 @@ struct FieldDefinition {
     delete_constraint: Option<String>,
 }
 
-pub fn is_sobject(object_name: &str) -> bool {
-    !object_name.ends_with("__e") && !object_name.ends_with("__mdt")
-}
-
-pub fn delete_order(sobjects: &[SObject]) -> Option<Vec<&SObject>> {
-    let delete_dependency = to_graph(sobjects);
-    delete_dependency
-        .topological_sort().
-        map(|sorted_indices| {
-            let mut result: Vec<&SObject> = Vec::with_capacity(sorted_indices.len());
-            for index in sorted_indices {
-                result.push(&sobjects[index]);
-            }
-            result
-        })
-}
-
-fn map_name_to_index(sobjects: &[SObject]) -> HashMap<&str, usize> {
-    let mut index_by_sobject_name: HashMap<&str, usize> = HashMap::with_capacity(sobjects.len());
-    for (index, sobject) in sobjects.iter().enumerate() {
-        index_by_sobject_name.insert(sobject.name(), index);
-    }
-    index_by_sobject_name
-}
-
-fn to_graph(sobjects: &[SObject]) -> DirectedGraph {
-    let index_by_sobject_name = map_name_to_index(sobjects);
-
-    let mut graph = graph::DirectedGraph::new(sobjects.len());
-    for (index, sobject) in sobjects.iter().enumerate() {
-        let mut edges: Vec<usize> = Vec::with_capacity(sobject.lookup_fields.len());
-
-        for field in &sobject.lookup_fields {
-            if field.lookup_type == LookupType::Lookup && field.delete_constraint == Some(DeleteConstraint::Restrict) {
-                edges.push(index_by_sobject_name[field.target_sobject.as_str()]);
-            }
-        }
-        graph.add_edges(index, edges.as_slice());
-    }
-    graph
-}
-
 impl SObject {
     pub fn name(&self) -> &str {
         &self.name
@@ -105,7 +63,7 @@ impl SObject {
                 };
             };
             paths.iter()
-                .filter(|path| path.is_file() && is_sobject(path.file_stem().and_then(std::ffi::OsStr::to_str).unwrap()))
+                .filter(|path| path.is_file() && SObject::is_sobject(path.file_stem().and_then(std::ffi::OsStr::to_str).unwrap()))
                 .map(SObject::parse_sobject_file)
                 .collect()
         } else {
@@ -201,13 +159,55 @@ impl SObject {
         };
         sobject
     }
+
+    pub fn is_sobject(object_name: &str) -> bool {
+        !object_name.ends_with("__e") && !object_name.ends_with("__mdt")
+    }
+
+    pub fn delete_order(sobjects: &[SObject]) -> Option<Vec<&SObject>> {
+        let delete_dependency = SObject::convert_to_graph(sobjects);
+        delete_dependency
+            .topological_sort().
+            map(|sorted_indices| {
+                let mut result: Vec<&SObject> = Vec::with_capacity(sorted_indices.len());
+                for index in sorted_indices {
+                    result.push(&sobjects[index]);
+                }
+                result
+            })
+    }
+
+    fn map_name_to_index(sobjects: &[SObject]) -> HashMap<&str, usize> {
+        let mut index_by_sobject_name: HashMap<&str, usize> = HashMap::with_capacity(sobjects.len());
+        for (index, sobject) in sobjects.iter().enumerate() {
+            index_by_sobject_name.insert(sobject.name(), index);
+        }
+        index_by_sobject_name
+    }
+
+    fn convert_to_graph(sobjects: &[SObject]) -> DirectedGraph {
+        let index_by_sobject_name = SObject::map_name_to_index(sobjects);
+
+        let mut graph = graph::DirectedGraph::new(sobjects.len());
+        for (index, sobject) in sobjects.iter().enumerate() {
+            let mut edges: Vec<usize> = Vec::with_capacity(sobject.lookup_fields.len());
+
+            for field in &sobject.lookup_fields {
+                if field.lookup_type == LookupType::Lookup && field.delete_constraint == Some(DeleteConstraint::Restrict) {
+                    edges.push(index_by_sobject_name[field.target_sobject.as_str()]);
+                }
+            }
+            graph.add_edges(index, edges.as_slice());
+        }
+        graph
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
-    use crate::{delete_order, is_sobject, LookupField, SObject};
+    use crate::{LookupField, SObject};
     use crate::DeleteConstraint::{Cascade, Restrict, SetNull};
     use crate::LookupType::Lookup;
 
@@ -282,17 +282,17 @@ mod tests {
 
     #[test]
     fn test_sobject_detection() {
-        assert_eq!(true, is_sobject("Account"));
-        assert_eq!(true, is_sobject("Custom_Object__c"));
-        assert_eq!(false, is_sobject("Custom_Event__e"));
-        assert_eq!(false, is_sobject("Custom_Metadata__mdt"));
+        assert_eq!(true, SObject::is_sobject("Account"));
+        assert_eq!(true, SObject::is_sobject("Custom_Object__c"));
+        assert_eq!(false, SObject::is_sobject("Custom_Event__e"));
+        assert_eq!(false, SObject::is_sobject("Custom_Metadata__mdt"));
     }
 
     #[test]
     fn test_delete_sort() {
         let sobjects = SObject::parse(&Path::new("../salesforce/tests/objects").to_path_buf());
 
-        let sorted_sobjects = delete_order(&sobjects).unwrap();
+        let sorted_sobjects = SObject::delete_order(&sobjects).unwrap();
 
         assert_eq!(2, sorted_sobjects.len());
         assert_eq!("Account", sorted_sobjects[0].name);
